@@ -1,0 +1,192 @@
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.3/jquery.min.js"></script>
+
+<link href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/css/bootstrap.min.css" rel="stylesheet" integrity="sha256-MfvZlkHCEqatNoGiOXveE8FIwMzZg4W85qfrfIFBfYc= sha512-dTfge/zgoMYpP7QbHy4gWMEGsbsdZeCXz7irItjcC3sPUFtf0kuFbDz/ixG7ArTxmDjLXDmezHubeNikyKGVyQ==" crossorigin="anonymous">
+
+<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/js/bootstrap.min.js" integrity="sha256-Sk3nkD6mLTMOF0EOpNtsIry+s1CsaqQC1rVLTAy+0yc= sha512-K1qjQ+NcF2TYO/eI3M6v8EiNYZfA95pQumfvcVrTHtwQVDG+aHRqLi/ETn2uB+1JqwYqVG3LIvdm9lj6imS/pQ==" crossorigin="anonymous"></script>
+
+<h2>You can put this in rails public folder and add your blockspring api key below.</h2>
+
+<div id="input_list" class="">
+
+</div>
+
+
+<script>
+  var api_key = 'APIKEYHERE';
+
+  var inputs = [
+    {
+      "name" : "color",
+      "optional" : false,
+      "type" : "text",
+      "label" : "Favorite Color",
+      "help_text" : "Colors are for winners",
+      "default" : "blue",
+      "options": {
+        "type": "static",
+        "static": [
+          {
+            "name": "Red",
+            "value": "red"
+          },
+          {
+            "name": "Blue",
+            "value": "blue"
+          },
+          {
+            "name": "AMARANTH",
+            "value": "dude_thats_a_plant"
+          }
+        ]
+      }
+    },
+    {
+      "name" : "account_id",
+      "optional" : false,
+      "type" : "text",
+      "label" : "Account",
+      "help_text" : "Accounts are for winners",
+      "default" : null,
+      "options": {
+        "type": "block",
+        "block_id": "google-analytics-accounts",
+        "root_key": "data",
+        "value_key": "id",
+        "name_key": "name"
+      }
+    },
+    {
+      "name" : "web_property_id",
+      "optional" : false,
+      "type" : "text",
+      "label" : "Web Property",
+      "help_text" : "Accounts are for winners",
+      "default" : null,
+      "options": {
+        "type": "block",
+        "block_id": "google-analytics-web-properties",
+        "root_key": "data",
+        "value_key": "id",
+        "name_key": "name",
+        "param_deps": [
+          {
+            "input_param": "account_id",
+            "block_param": "account_id"
+          }
+        ]
+      }
+    },
+    {
+      "name" : "profile_id",
+      "optional" : false,
+      "type" : "text",
+      "label" : "Profile",
+      "help_text" : "Profiles are for winners",
+      "default" : "?",
+      "options": {
+        "type": "block",
+        "block_id": "google-analytics-profiles",
+        "root_key": "data",
+        "value_key": "id",
+        "name_key": "name",
+        "param_deps": [
+          {
+            "input_param": "account_id",
+            "block_param": "account_id"
+          },
+          {
+            "input_param": "web_property_id",
+            "block_param": "web_property_id"
+          }
+        ]
+      }
+    }
+  ];
+
+  $list = $('#input_list');
+
+  inputs.forEach(function(input) {
+    var $html = $('<div>').text(input.label + ': ');
+
+    if (input.options) {
+      var $e = $('<select>');
+      if (input.options.multiple) {
+        $e.attr('multiple', 'multiple');
+      }
+      $e.attr('id', input.name);
+      if(input.options.type == 'static') {
+        input.options.static.forEach(function(option) {
+          var $new_option = $('<option>');
+          $new_option.val(option.value);
+          $new_option.text(option.name);
+          if(input.default && input.default == option.value) {
+            $new_option.attr('selected', 'selected');
+            $new_option.val(option.default);
+          }
+          $e.append($new_option);
+        });
+      }
+      if(input.options.type == 'block') {
+        $.ajax({
+          method: 'POST',
+          url: 'https://run.blockspring.com/api_v2/blocks/' + input.options.block_id + '?api_key=' + api_key,
+          data: {}
+        }).success(function(data) {
+          console.log(data);
+          var option_data = data[input.options.root_key];
+          option_data.forEach(function(option) {
+            var $new_option = $('<option>');
+            $new_option.val(option[input.options.value_key || 'value']);
+            $new_option.text(option[input.options.name_key || 'name']);
+            $e.append($new_option);
+          });
+          $e.change();
+        });
+
+        if(input.options.param_deps) {
+          input.options.param_deps.forEach(function(dep) {
+            console.log(dep);
+            $('#' + dep.input_param).change(function() {
+
+              var data = {};
+              var not_all_params = false;
+
+              input.options.param_deps.forEach(function(dep) {
+                var val = $('#' + dep.input_param).val();
+                if (val == '') {
+                  not_all_params = true;
+                }
+                data[dep.block_param] = val;
+              });
+
+              if (not_all_params) {
+                return;
+              }
+
+              $.ajax({
+                method: 'POST',
+                url: 'https://run.blockspring.com/api_v2/blocks/' + input.options.block_id + '?cache=true&expiry=20&api_key=' + api_key,
+                data: data
+              }).success(function(data) {
+                console.log(data);
+                var option_data = data[input.options.root_key];
+                $e.empty();
+                option_data.forEach(function(option) {
+                  var $new_option = $('<option>');
+                  $new_option.val(option[input.options.value_key || 'value']);
+                  $new_option.text(option[input.options.name_key || 'name']);
+                  $e.append($new_option);
+                });
+                $e.change();
+              });
+            });
+          });
+        }
+      }
+    }
+
+    $html.append($e);
+
+    $list.append($html);
+  });
+</script>
